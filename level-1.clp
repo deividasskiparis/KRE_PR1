@@ -173,6 +173,15 @@
   (assert (speed (- ?s 5)))
 )
 
+;;;;;;;;;;;;;;;;;;;;;;;
+;;;;level-0
+;;;;;;;;;;;;;;;;;;;;;;;
+
+;;FACTS
+;;; (throttle low) (trhottle medium) (throttle high)
+;;; (breaks low) (breaks medium) (breaks high)
+;;; (car on) (car off) (speed x)
+;;; (increment) (decrement)
 
 (defrule car-on
   ?on <- (car on)

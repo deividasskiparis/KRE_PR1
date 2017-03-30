@@ -1,4 +1,99 @@
 ;;;;;;;;;;;;;;;;;;;;;;;
+;;;;level-3
+;;;;;;;;;;;;;;;;;;;;;;;
+
+;;FACTS
+;;; (throttle low) (trhottle medium) (throttle high)
+;;; (breaks low) (breaks medium) (breaks high)
+;;; (car on) (car off) (speed x)
+;;; (increment) (decrement)
+
+;;; (control on) (control off)
+;;; (cruise on) (cruise paused)
+;;; (fix-speed) (cruise-speed x)
+;;; (pause) (recover)
+;;; (increase) (decrease)
+
+;;; (speed-limit x)
+;;; (obstacle x)
+
+;;; (cruise-paused reason)
+
+
+(defglobal ?*max-speed* = 200)
+(defglobal ?*min-cruise-speed* = 50)
+(defglobal ?*min-obstacle-dist* = 100)
+(defglobal ?*min-cruise-speed-limit* = 50)
+
+; Under the cruise control, if a (speed-limit X) signal is detected with X lower than the current speed, 
+; the cruise control gets paused and it orders (decrement)s till the car speed is equal or lower than the 
+; speed limit.
+
+; This function overload the pause-cruise-by-speed-limit function of level 2
+(defrule cruise-decrement-by-speed-limit
+  ?cruise <- (cruise on)
+  (speed-limit ?sl)
+  (speed ?s&:(> ?s ?sl))
+  =>
+  (retract ?cruise)
+  (assert (cruise paused) (cruise-paused speed-limit) (decrement (- ?s ?sl)))
+  ; speed limit remains in the system
+  (printout t "Cruise decrement the speed because it is higher than the speed limit." crlf)
+)
+
+; While paused because of this automatic speed reduction, new speed limit signals may be detected (speed-limit X) 
+; and the speed automatically regulated with (decrement)/(increment) instructions.
+(defrule cruise-decrement-by-speed-limit
+  (cruise paused)
+  (cruise-paused speed-limit)
+  (speed-limit ?sl)
+  (speed ?s&:(> ?s ?sl))
+  =>
+  (assert (decrement))
+  ; speed limit remains in the system
+  (printout t "Cruise decrement the speed because it is higher than the speed limit." crlf)
+)
+
+(defrule cruise-decrement-by-speed-limit
+  (cruise paused)
+  (cruise-paused speed-limit)
+  (speed-limit ?sl)
+  (speed ?s&:(< ?s ?sl))
+  =>
+  (assert (increment))
+  ; speed limit remains in the system
+  (printout t "Cruise increment the speed because it is lower than the speed limit." crlf)
+)
+
+; If the speed limit goes below 50 Km/h, the cruise control is deactivated and the control is left to the driver, 
+; after printing out a (beep) message. 
+(defrule low-speed-limit-signal
+  ?cruise <- (cruise ?)
+  (speed-limit ?sl&:(< ?sl *min-cruise-speed-limit*)) ; If the speed limit goes below 50 Km/h
+  =>
+  (retract ?cruise)
+  (printout t "beep" crlf) ; after printing out a (beep) message
+  (assert (control off)) ; the cruise control is deactivated and the control is left to the driver
+  ; speed limit remains in the system
+  (printout t "The cruise control was deactivated because low speed limit signal." crlf)
+)
+
+; If paused, and the speed limit in a new signal goes above the cruise speed, then the cruise control is automatically 
+; recovered, and it takes control to reach the corresponding cruise speed by means  of speed (increment)s.
+(defrule low-speed-limit-signal
+  ?cruise <- (cruise paused) ; If paused,
+  (speed-limit ?sl) 
+  (cruise-speed ?cs&:(> ?sl ?cs)); and the speed limit in a new signal goes above the cruise speed,
+  =>
+  (retract ?cruise)
+  (printout t "beep" crlf)
+  (assert (cruise on)) ; then the cruise control is automatically recovered,
+  ; and it takes control to reach the corresponding cruise speed by means  of speed (increment)s.
+  ; This happens in the automatic-increase-speed function.
+  (printout t "The cruise control was activated because high speed limit signal." crlf)
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;level-2
 ;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -18,27 +113,23 @@
 ;;; (obstacle x)
 
 
-(defglobal ?*max-speed* = 200)
-(defglobal ?*min-cruise-speed* = 50)
-(defglobal ?*min-obstacle-dist* = 100)
-
-
 ; as new speed limits are detected, if the car speed is larger than the speed limit, the cruise control has to be paused
 ; If speed is lower than 50km/h, the cruise control is deactivated by function: "automatic-low-speed-paused-deactivation"
 
-(defrule pause-cruise-by-speed-limit
-  (speed-limit ?sl)
-  (speed ?s&:(> ?s ?sl))
-  ?cruise <- (cruise on)
-  =>
-  (retract ?cruise)
-  (assert (cruise paused))
-  ; speed limit remains in the system
-  (printout t "Cruise control on." crlf)
+; (defrule pause-cruise-by-speed-limit
+;   (speed-limit ?sl)
+;   (speed ?s&:(> ?s ?sl))
+;   ?cruise <- (cruise on)
+;   =>
+;   (retract ?cruise)
+;   (assert (cruise paused))
+;   ; speed limit remains in the system
+;   (printout t "Cruise control on." crlf)
 
-)
+; )
 
-; If several (obstacle X) messages exist, the system discards those with a larger X, and it reacts only the one with the lower X.
+; If several (obstacle X) messages exist, the system discards those with a larger X, and it reacts only the one 
+; with the lower X.
 
 (defrule delete_farther_obstacles
 (declare (salience 3))
@@ -50,9 +141,9 @@
   (printout t "(obstacle " ?dist2 ") deleted" crlf)
 )
 
-; If driving is under the cruise control, and an (obstacle X) with minimal distance X is detected closer than 100 m (i.e., X<100.0), then the cruise control is paused (if speed „d 50 Km/h) or
-;deactivated (if speed < 50 Km/h) and the control is given to the driver, who is informed with a print out of the message
-;(beep).
+; If driving is under the cruise control, and an (obstacle X) with minimal distance X is detected closer than 100 m 
+; (i.e., X<100.0), then the cruise control is paused (if speed >= 50 Km/h) or deactivated (if speed < 50 Km/h) and 
+; the control is given to the driver, who is informed with a print out of the message (beep).
 
 (defrule pause-cruise-if-obstacle
   ?crz <- (cruise on) ; (cruise on) means the speed is more than 50
@@ -174,7 +265,8 @@
   (printout t "The cruise control is paused." crlf)
 )
 
-; From a paused situation, the driver can recover cruise control by pushing the button (recover), ; then the cruise control will start working to increase/decrease the current speed to reach the
+; From a paused situation, the driver can recover cruise control by pushing the button (recover), ; then the cruise 
+; control will start working to increase/decrease the current speed to reach the
 ; cruise speed by means of instructions (increment)/(decrement).
 
 (defrule recover-cruise
