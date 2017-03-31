@@ -9,15 +9,13 @@
 ;;; (increment) (decrement)
 
 ;;; (control on) (control off)
-;;; (cruise on) (cruise paused)
+;;; (cruise on) (cruise paused reason)
 ;;; (fix-speed) (cruise-speed x)
 ;;; (pause) (recover)
 ;;; (increase) (decrease)
 
 ;;; (speed-limit x)
 ;;; (obstacle x)
-
-;;; (cruise-paused reason)
 
 
 (defglobal ?*max-speed* = 200)
@@ -31,21 +29,7 @@
 
 ; This function overload the pause-cruise-by-speed-limit function of level 2
 (defrule cruise-decrement-by-speed-limit
-  ?cruise <- (cruise on)
-  (speed-limit ?sl)
-  (speed ?s&:(> ?s ?sl))
-  =>
-  (retract ?cruise)
-  (assert (cruise paused) (cruise-paused speed-limit) (decrement (- ?s ?sl)))
-  ; speed limit remains in the system
-  (printout t "Cruise decrement the speed because it is higher than the speed limit." crlf)
-)
-
-; While paused because of this automatic speed reduction, new speed limit signals may be detected (speed-limit X) 
-; and the speed automatically regulated with (decrement)/(increment) instructions.
-(defrule cruise-decrement-by-speed-limit
-  (cruise paused)
-  (cruise-paused speed-limit)
+  (cruise paused speed-limit)
   (speed-limit ?sl)
   (speed ?s&:(> ?s ?sl))
   =>
@@ -54,9 +38,20 @@
   (printout t "Cruise decrement the speed because it is higher than the speed limit." crlf)
 )
 
-(defrule cruise-decrement-by-speed-limit
-  (cruise paused)
-  (cruise-paused speed-limit)
+; While paused because of this automatic speed reduction, new speed limit signals may be detected (speed-limit X) 
+; and the speed automatically regulated with (decrement)/(increment) instructions.
+; (defrule cruise-decrement-by-speed-limit
+;   (cruise paused sl)
+;   (speed-limit ?sl)
+;   (speed ?s&:(> ?s ?sl))
+;   =>
+;   (assert (decrement))
+;   ; speed limit remains in the system
+;   (printout t "Cruise decrement the speed because it is higher than the speed limit." crlf)
+; )
+
+(defrule cruise-increment-by-speed-limit
+  (cruise paused speed-limit)
   (speed-limit ?sl)
   (speed ?s&:(< ?s ?sl))
   =>
@@ -72,7 +67,7 @@
   (speed-limit ?sl&:(< ?sl *min-cruise-speed-limit*)) ; If the speed limit goes below 50 Km/h
   =>
   (retract ?cruise)
-  (printout t "beep" crlf) ; after printing out a (beep) message
+  ; (printout t "beep" crlf) ; after printing out a (beep) message
   (assert (control off)) ; the cruise control is deactivated and the control is left to the driver
   ; speed limit remains in the system
   (printout t "The cruise control was deactivated because low speed limit signal." crlf)
@@ -86,12 +81,39 @@
   (cruise-speed ?cs&:(> ?sl ?cs)); and the speed limit in a new signal goes above the cruise speed,
   =>
   (retract ?cruise)
-  (printout t "beep" crlf)
+  ; (printout t "beep" crlf)
   (assert (cruise on)) ; then the cruise control is automatically recovered,
   ; and it takes control to reach the corresponding cruise speed by means  of speed (increment)s.
   ; This happens in the automatic-increase-speed function.
   (printout t "The cruise control was activated because high speed limit signal." crlf)
 )
+
+(deffunction intensity-by-distance (?d)
+  (if (< ?d 30) then (bind ?result high)
+  else (if (< ?d 60) then (bind ?result medium)
+    else (if (< ?d 100) then (bind ?result low)
+      (else (bind ?result safe)))))
+  (return ?result)
+)
+
+; Under the cruise control, if an (obstacle X) is detected, X being the minimal distance of all the detected obstacles, 
+; and X lower than 100 m, then the cruise control pauses and the car speed is regulated with (decrement)s so that the car 
+; could get stopped in the distance X, according to the current car speed S. When the speed goes below 50 Km/h the cruise 
+; control deactivates, but the speed control remains responsible to stop the car before crashing with (decrement)s.
+(defrule decrement-because-obstacle
+  ?cruise <- (cruise on)
+  (obstacle ?d1&:(< ?d1 *min-obstacle-dist*)) ; X lower than 100 m
+  (not obstacle ?d2&:(< ?d2 ?d1)) ;  X being the minimal distance of all the detected obstacles, 
+  (speed ?s)
+  =>
+  (retract ?cruise)
+  (assert (cruise paused obstacle) (breaks (intensity-by-distance ?d1))) ; the cruise control pauses
+  ; and it takes control to reach the corresponding cruise speed by means  of speed (increment)s.
+  ; This happens in the automatic-increase-speed function.
+  (printout t "The cruise control was activated because high speed limit signal." crlf)
+)
+
+calculate the nearest obstacle.
 
 ;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;level-2
@@ -116,17 +138,16 @@
 ; as new speed limits are detected, if the car speed is larger than the speed limit, the cruise control has to be paused
 ; If speed is lower than 50km/h, the cruise control is deactivated by function: "automatic-low-speed-paused-deactivation"
 
-; (defrule pause-cruise-by-speed-limit
-;   (speed-limit ?sl)
-;   (speed ?s&:(> ?s ?sl))
-;   ?cruise <- (cruise on)
-;   =>
-;   (retract ?cruise)
-;   (assert (cruise paused))
-;   ; speed limit remains in the system
-;   (printout t "Cruise control on." crlf)
-
-; )
+(defrule pause-cruise-by-speed-limit
+  (speed-limit ?sl)
+  (speed ?s&:(> ?s ?sl))
+  ?cruise <- (cruise on)
+  =>
+  (retract ?cruise)
+  (assert (cruise paused speed-limit))
+  ; speed limit remains in the system
+  (printout t "Cruise control on." crlf)
+)
 
 ; If several (obstacle X) messages exist, the system discards those with a larger X, and it reacts only the one 
 ; with the lower X.
