@@ -64,7 +64,7 @@
 ; after printing out a (beep) message. 
 (defrule low-speed-limit-signal
   ?cruise <- (cruise ?)
-  (speed-limit ?sl&:(< ?sl *min-cruise-speed-limit*)) ; If the speed limit goes below 50 Km/h
+  (speed-limit ?sl&:(< ?sl ?*min-cruise-speed-limit*)) ; If the speed limit goes below 50 Km/h
   =>
   (retract ?cruise)
   ; (printout t "beep" crlf) ; after printing out a (beep) message
@@ -75,7 +75,8 @@
 
 ; If paused, and the speed limit in a new signal goes above the cruise speed, then the cruise control is automatically 
 ; recovered, and it takes control to reach the corresponding cruise speed by means  of speed (increment)s.
-(defrule low-speed-limit-signal
+(defrule recover-cruise-control
+  (declare (salience 3))
   ?cruise <- (cruise paused) ; If paused,
   (speed-limit ?sl) 
   (cruise-speed ?cs&:(> ?sl ?cs)); and the speed limit in a new signal goes above the cruise speed,
@@ -92,7 +93,7 @@
   (if (< ?d 30) then (bind ?result high)
   else (if (< ?d 60) then (bind ?result medium)
     else (if (< ?d 100) then (bind ?result low)
-      (else (bind ?result safe)))))
+      else (bind ?result safe))))
   (return ?result)
 )
 
@@ -102,8 +103,8 @@
 ; control deactivates, but the speed control remains responsible to stop the car before crashing with (decrement)s.
 (defrule decrement-because-obstacle
   ?cruise <- (cruise on)
-  (obstacle ?d1&:(< ?d1 *min-obstacle-dist*)) ; X lower than 100 m
-  (not obstacle ?d2&:(< ?d2 ?d1)) ;  X being the minimal distance of all the detected obstacles, 
+  (obstacle ?d1&:(< ?d1 ?*min-obstacle-dist*)) ; X lower than 100 m
+  (not (obstacle ?d2&:(< ?d2 ?d1))) ;  X being the minimal distance of all the detected obstacles, 
   (speed ?s)
   =>
   (retract ?cruise)
@@ -112,8 +113,6 @@
   ; This happens in the automatic-increase-speed function.
   (printout t "The cruise control was activated because high speed limit signal." crlf)
 )
-
-calculate the nearest obstacle.
 
 ;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;level-2
@@ -146,18 +145,18 @@ calculate the nearest obstacle.
   (retract ?cruise)
   (assert (cruise paused speed-limit))
   ; speed limit remains in the system
-  (printout t "Cruise control on." crlf)
+  (printout t "Cruise control paused." crlf)
 )
 
 ; If several (obstacle X) messages exist, the system discards those with a larger X, and it reacts only the one 
 ; with the lower X.
 
 (defrule delete_farther_obstacles
-(declare (salience 3))
+  (declare (salience 3))
   (obstacle ?dist1)
   ?o <- (obstacle ?dist2)
   (test(< ?dist1 ?dist2)) ; dist1 is closer
-=>
+  =>
   (retract ?o)
   (printout t "(obstacle " ?dist2 ") deleted" crlf)
 )
