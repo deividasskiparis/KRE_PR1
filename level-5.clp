@@ -10,30 +10,25 @@
 
 ;;; (control on) (control off)
 ;;; (control-speed x)
+;;; (set-control-speed x)
 
 ;;; (speed-limit x)
 ;;; (obstacle x)
-
-;(load "C:/Users/deividas/Google Drive/UNIVERSITY/Semester4/KRE/Practical1/level-5.clp")
 
 (defglobal ?*max-speed* = 200)
 (defglobal ?*min-obstacle-dist* = 100)
 (defglobal ?*speed-update-step* = 5)
 
-(deffacts init "Some initial facts for playing around"
- (car on)
- (control-speed 80)
- )
 
 (defrule set-control-speed "Set the desired control speed"
-?d<-(set-control-speed ?s)
+?d<-(control on)
 (not(control-speed ?))
 =>
 (retract ?d)
-(assert (control-speed ?s))
+(printout t "FAIL! Set control speed in order to have automatic control!" crlf)
 )
 
-(defrule automatic-increase-speed "Increse speed"
+(defrule automatic-increase-speed "Increase speed"
   (control on) ; Automatic control is turned on
   (speed ?speed)
   (not(speed-limit ?sl&:(< ?sl (+ ?speed ?*speed-update-step*)))) ; If the increase of the speed will not cause to go over limit
@@ -111,7 +106,7 @@
   (retract ?on)
   (assert (control on))
   (assert (speed 0))
-  (printout t "Car is started. Automatic control activated" crlf)
+  (printout t "Car is started. Activating automatic control..." crlf)
 )
 
 (defrule car-off

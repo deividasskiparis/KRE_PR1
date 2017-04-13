@@ -298,9 +298,6 @@
 )
 
 
-
-
-
 ; With the cruise contol activated, the driver can press (fix-speed) button, which means that
 ; the current speed is fixed to be the cruise speed (cruise-speed X).
 

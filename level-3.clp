@@ -27,6 +27,9 @@
 ; the cruise control gets paused and it orders (decrement)s till the car speed is equal or lower than the 
 ; speed limit.
 
+; While paused because of this automatic speed reduction, new speed limit signals may be detected (speed-limit X) 
+; and the speed automatically regulated with (decrement)/(increment) instructions.
+
 ; This function overload the pause-cruise-by-speed-limit function of level 2
 (defrule cruise-decrement-by-speed-limit
   (cruise paused speed-limit)
@@ -37,18 +40,6 @@
   ; speed limit remains in the system
   (printout t "Cruise decrement the speed because it is higher than the speed limit." crlf)
 )
-
-; While paused because of this automatic speed reduction, new speed limit signals may be detected (speed-limit X) 
-; and the speed automatically regulated with (decrement)/(increment) instructions.
-; (defrule cruise-decrement-by-speed-limit
-;   (cruise paused sl)
-;   (speed-limit ?sl)
-;   (speed ?s&:(> ?s ?sl))
-;   =>
-;   (assert (decrement))
-;   ; speed limit remains in the system
-;   (printout t "Cruise decrement the speed because it is higher than the speed limit." crlf)
-; )
 
 (defrule cruise-increment-by-speed-limit
   (cruise paused speed-limit)
@@ -63,13 +54,11 @@
 ; If the speed limit goes below 50 Km/h, the cruise control is deactivated and the control is left to the driver, 
 ; after printing out a (beep) message. 
 (defrule low-speed-limit-signal
-  ?cruise <- (cruise ?)
+  ?cruise <- (cruise ? ?$)
   (speed-limit ?sl&:(< ?sl ?*min-cruise-speed-limit*)) ; If the speed limit goes below 50 Km/h
   =>
   (retract ?cruise)
-  ; (printout t "beep" crlf) ; after printing out a (beep) message
   (assert (control off)) ; the cruise control is deactivated and the control is left to the driver
-  ; speed limit remains in the system
   (printout t "The cruise control was deactivated because low speed limit signal." crlf)
 )
 
@@ -77,7 +66,7 @@
 ; recovered, and it takes control to reach the corresponding cruise speed by means  of speed (increment)s.
 (defrule recover-cruise-control
   (declare (salience 3))
-  ?cruise <- (cruise paused) ; If paused,
+  ?cruise <- (cruise paused ?$) ; If paused,
   (speed-limit ?sl) 
   (cruise-speed ?cs&:(> ?sl ?cs)); and the speed limit in a new signal goes above the cruise speed,
   =>
@@ -89,6 +78,9 @@
   (printout t "The cruise control was activated because high speed limit signal." crlf)
 )
 
+; This function calculates the breaking instensity, depending on the distance of the obstancle detected.
+; The idea is that if in reality the obstacle is moving object, soon its speed will be greater than the cars
+; thus the distance will increase above 100m. If it does not, the car will keep breaking until stopped in order to avoid colission
 (deffunction intensity-by-distance (?d)
   (if (< ?d 30) then (bind ?result high)
   else (if (< ?d 60) then (bind ?result medium)
